@@ -1,7 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
 
 export default function StudentChat() {
   const [messages, setMessages] = useState([
@@ -12,7 +18,31 @@ export default function StudentChat() {
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [lessonContent, setLessonContent] = useState('');
   const router = useRouter();
+
+  useEffect(() => {
+    const init = async () => {
+      // Проверяем авторизацию
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { router.push('/'); return; }
+
+      // Загружаем материал урока из БД
+      const { data } = await supabase
+        .from('lessons')
+        .select('content')
+        .limit(1)
+        .single();
+
+      if (data) setLessonContent(data.content);
+    };
+    init();
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/');
+  };
 
   const sendMessage = async () => {
     if (!input.trim()) return;
@@ -24,8 +54,6 @@ export default function StudentChat() {
     setLoading(true);
 
     try {
-      const lessonContent = localStorage.getItem('lessonContent') || '';
-
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -60,7 +88,7 @@ export default function StudentChat() {
           <p className="text-indigo-200 text-sm">Режим ученика</p>
         </div>
         <button
-          onClick={() => router.push('/')}
+          onClick={handleLogout}
           className="text-indigo-200 hover:text-white text-sm"
         >
           Выйти

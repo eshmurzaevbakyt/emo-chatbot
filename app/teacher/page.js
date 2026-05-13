@@ -1,18 +1,69 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
 
 export default function TeacherPage() {
   const [lesson, setLesson] = useState('');
   const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState(null);
   const router = useRouter();
 
-  const handleSave = () => {
-    if (!lesson.trim()) return;
-    localStorage.setItem('lessonContent', lesson);
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { router.push('/'); return; }
+      setUser(user);
+
+      // Загружаем существующий материал
+      const { data } = await supabase
+        .from('lessons')
+        .select('content')
+        .eq('teacher_id', user.id)
+        .single();
+
+      if (data) setLesson(data.content);
+    };
+    getUser();
+  }, []);
+
+  const handleSave = async () => {
+    if (!lesson.trim() || !user) return;
+    setLoading(true);
+
+    // Проверяем есть ли уже урок
+    const { data: existing } = await supabase
+      .from('lessons')
+      .select('id')
+      .eq('teacher_id', user.id)
+      .single();
+
+    if (existing) {
+      await supabase
+        .from('lessons')
+        .update({ content: lesson })
+        .eq('teacher_id', user.id);
+    } else {
+      await supabase
+        .from('lessons')
+        .insert({ teacher_id: user.id, content: lesson });
+    }
+
+    setLoading(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/');
   };
 
   return (
@@ -25,7 +76,7 @@ export default function TeacherPage() {
           <p className="text-indigo-200 text-sm">Режим учителя</p>
         </div>
         <button
-          onClick={() => router.push('/')}
+          onClick={handleLogout}
           className="text-indigo-200 hover:text-white text-sm"
         >
           Выйти
@@ -48,9 +99,10 @@ export default function TeacherPage() {
           />
           <button
             onClick={handleSave}
-            className="mt-4 w-full py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors"
+            disabled={loading}
+            className="mt-4 w-full py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50"
           >
-            {saved ? '✓ Сохранено!' : 'Сохранить материал'}
+            {saved ? '✓ Сохранено!' : loading ? 'Сохраняю...' : 'Сохранить материал'}
           </button>
         </div>
       </div>
