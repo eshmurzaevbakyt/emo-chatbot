@@ -18,26 +18,41 @@ export default function StudentChat() {
     if (!input.trim()) return;
 
     const userMessage = { role: 'user', content: input };
-    setMessages((prev) => [...prev, userMessage]);
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
     setInput('');
     setLoading(true);
 
-    // Пока просто заглушка — потом подключим OpenAI
-    setTimeout(() => {
+    try {
+      const lessonContent = localStorage.getItem('lessonContent') || '';
+
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: updatedMessages,
+          lessonContent,
+        }),
+      });
+
+      const data = await response.json();
       setMessages((prev) => [
         ...prev,
-        {
-          role: 'assistant',
-          content: 'Жакшы суроо! Бул тема боюнча өзүңүз эмне ойлойсуз? (Хороший вопрос! Что ты сам думаешь по этой теме?)',
-        },
+        { role: 'assistant', content: data.message },
       ]);
+    } catch (error) {
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: 'Кечиресиз, ката кетти. (Извините, произошла ошибка.)' },
+      ]);
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      
+
       {/* Шапка */}
       <div className="bg-indigo-600 text-white px-6 py-4 flex items-center justify-between">
         <div>
