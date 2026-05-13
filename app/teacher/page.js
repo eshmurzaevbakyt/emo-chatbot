@@ -2,12 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
 
 export default function TeacherPage() {
   const [lesson, setLesson] = useState('');
@@ -17,44 +11,30 @@ export default function TeacherPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push('/'); return; }
-      setUser(user);
+    const init = async () => {
+      const response = await fetch('/api/auth/me');
+      if (!response.ok) { router.push('/'); return; }
+      const data = await response.json();
+      setUser(data);
 
-      // Загружаем существующий материал
-      const { data } = await supabase
-        .from('lessons')
-        .select('content')
-        .eq('teacher_id', user.id)
-        .single();
-
-      if (data) setLesson(data.content);
+      const lessonRes = await fetch('/api/lessons');
+      if (lessonRes.ok) {
+        const lessonData = await lessonRes.json();
+        if (lessonData.content) setLesson(lessonData.content);
+      }
     };
-    getUser();
+    init();
   }, []);
 
   const handleSave = async () => {
-    if (!lesson.trim() || !user) return;
+    if (!lesson.trim()) return;
     setLoading(true);
 
-    // Проверяем есть ли уже урок
-    const { data: existing } = await supabase
-      .from('lessons')
-      .select('id')
-      .eq('teacher_id', user.id)
-      .single();
-
-    if (existing) {
-      await supabase
-        .from('lessons')
-        .update({ content: lesson })
-        .eq('teacher_id', user.id);
-    } else {
-      await supabase
-        .from('lessons')
-        .insert({ teacher_id: user.id, content: lesson });
-    }
+    await fetch('/api/lessons', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: lesson }),
+    });
 
     setLoading(false);
     setSaved(true);
@@ -62,28 +42,24 @@ export default function TeacherPage() {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await fetch('/api/auth/logout', { method: 'POST' });
     router.push('/');
   };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-
-      {/* Шапка */}
       <div className="bg-indigo-600 text-white px-6 py-4 flex items-center justify-between">
         <div>
           <h1 className="font-bold text-lg">EmoBot</h1>
-          <p className="text-indigo-200 text-sm">Режим учителя</p>
+          <p className="text-indigo-200 text-sm">
+            {user ? `${user.firstName} ${user.lastName}` : 'Учитель'}
+          </p>
         </div>
-        <button
-          onClick={handleLogout}
-          className="text-indigo-200 hover:text-white text-sm"
-        >
+        <button onClick={handleLogout} className="text-indigo-200 hover:text-white text-sm">
           Выйти
         </button>
       </div>
 
-      {/* Контент */}
       <div className="flex-1 max-w-2xl mx-auto w-full px-4 py-8">
         <div className="bg-white rounded-2xl shadow p-6">
           <h2 className="text-xl font-bold text-gray-800 mb-2">Материал урока</h2>
@@ -106,7 +82,6 @@ export default function TeacherPage() {
           </button>
         </div>
       </div>
-
     </div>
   );
 }
