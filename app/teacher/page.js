@@ -63,9 +63,17 @@ export default function TeacherPage() {
             {user ? `${user.firstName} ${user.lastName}` : 'Учитель'}
           </p>
         </div>
-        <button onClick={handleLogout} className="text-indigo-200 hover:text-white text-sm">
-          Выйти
-        </button>
+        <div className="flex gap-4 items-center">
+  <button
+    onClick={() => router.push('/profile')}
+    className="text-indigo-200 hover:text-white text-sm"
+  >
+    Профиль
+  </button>
+  <button onClick={handleLogout} className="text-indigo-200 hover:text-white text-sm">
+    Выйти
+  </button>
+</div>
       </div>
 
       {/* Вкладки */}

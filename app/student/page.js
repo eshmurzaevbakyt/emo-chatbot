@@ -98,9 +98,17 @@ export default function StudentChat() {
             {user ? `${user.firstName} ${user.lastName}` : 'Ученик'}
           </p>
         </div>
-        <button onClick={handleLogout} className="text-indigo-200 hover:text-white text-sm">
-          Выйти
-        </button>
+        <div className="flex gap-4 items-center">
+  <button
+    onClick={() => router.push('/profile')}
+    className="text-indigo-200 hover:text-white text-sm"
+  >
+    Профиль
+  </button>
+  <button onClick={handleLogout} className="text-indigo-200 hover:text-white text-sm">
+    Выйти
+  </button>
+</div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4 max-w-2xl mx-auto w-full">
