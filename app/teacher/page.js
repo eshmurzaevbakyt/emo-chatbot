@@ -195,16 +195,34 @@ const handleSaveLesson = async () => {
     <div className="min-h-screen bg-gray-50 flex flex-col">
 
       {/* Шапка */}
-      <div className="bg-indigo-600 text-white px-6 py-4 flex items-center justify-between">
-        <div>
-          <h1 className="font-bold text-lg">EmoBot</h1>
-          <p className="text-indigo-200 text-sm">{user ? `${user.firstName} ${user.lastName}` : 'Учитель'}</p>
-        </div>
-        <div className="flex gap-4 items-center">
-          <button onClick={() => router.push('/profile')} className="text-indigo-200 hover:text-white text-sm">Профиль</button>
-          <button onClick={handleLogout} className="text-indigo-200 hover:text-white text-sm">Выйти</button>
-        </div>
-      </div>
+<div className="bg-white border-b border-gray-100 shadow-sm px-6 py-3 flex items-center justify-between">
+  <div className="flex items-center gap-3">
+    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow">
+      AI
+    </div>
+    <div>
+      <h1 className="font-bold text-gray-900 text-sm leading-none">EmoBot</h1>
+      <p className="text-xs text-gray-400 mt-0.5">
+        {user ? `${user.firstName} ${user.lastName}` : 'Учитель'}
+      </p>
+    </div>
+  </div>
+  <div className="flex items-center gap-2">
+    <button
+      onClick={() => router.push('/profile')}
+      className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xs font-bold hover:bg-indigo-200 transition-colors"
+      title="Профиль"
+    >
+      {user ? `${user.firstName?.[0]}${user.lastName?.[0]}` : 'У'}
+    </button>
+    <button
+      onClick={handleLogout}
+      className="px-3 py-1.5 text-xs text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+    >
+      Выйти
+    </button>
+  </div>
+</div>
 
       {/* Вкладки */}
       <div className="bg-white border-b px-6">
