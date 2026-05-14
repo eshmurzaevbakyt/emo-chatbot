@@ -1,19 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function StudentChat() {
-  const [messages, setMessages] = useState([
-    {
-      role: 'assistant',
-      content: 'Салам! Мен сиздин STEM окутуучу жардамчыңызмын. Суроолоруңузду бериңиз! (Привет! Я твой STEM помощник. Задавай вопросы!)',
-    },
-  ]);
+  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [lessonContent, setLessonContent] = useState('');
   const [user, setUser] = useState(null);
+  const bottomRef = useRef(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -28,9 +24,26 @@ export default function StudentChat() {
         const lessonData = await lessonRes.json();
         if (lessonData.content) setLessonContent(lessonData.content);
       }
+
+      const messagesRes = await fetch('/api/messages');
+      if (messagesRes.ok) {
+        const messagesData = await messagesRes.json();
+        if (messagesData.length > 0) {
+          setMessages(messagesData.map(m => ({ role: m.role, content: m.content })));
+        } else {
+          setMessages([{
+            role: 'assistant',
+            content: 'Салам! Мен сиздин STEM окутуучу жардамчыңызмын. Суроолоруңузду бериңиз! (Привет! Я твой STEM помощник. Задавай вопросы!)',
+          }]);
+        }
+      }
     };
     init();
   }, []);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -39,11 +52,19 @@ export default function StudentChat() {
 
   const sendMessage = async () => {
     if (!input.trim()) return;
+
     const userMessage = { role: 'user', content: input };
     const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
     setInput('');
     setLoading(true);
+
+    // Сохраняем сообщение пользователя
+    await fetch('/api/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: 'user', content: input }),
+    });
 
     try {
       const response = await fetch('/api/chat', {
@@ -52,7 +73,15 @@ export default function StudentChat() {
         body: JSON.stringify({ messages: updatedMessages, lessonContent }),
       });
       const data = await response.json();
+      
       setMessages((prev) => [...prev, { role: 'assistant', content: data.message }]);
+
+      // Сохраняем ответ бота
+      await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: 'assistant', content: data.message }),
+      });
     } catch {
       setMessages((prev) => [...prev, { role: 'assistant', content: 'Кечиресиз, ката кетти.' }]);
     } finally {
@@ -91,6 +120,7 @@ export default function StudentChat() {
             <div className="bg-white text-gray-400 px-4 py-3 rounded-2xl shadow text-sm">Думаю...</div>
           </div>
         )}
+        <div ref={bottomRef} />
       </div>
 
       <div className="bg-white border-t px-4 py-4">
