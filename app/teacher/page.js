@@ -71,24 +71,30 @@ export default function TeacherPage() {
     setUploading(false);
   };
 
-  const handleSaveLesson = async () => {
-    if (!form.title.trim()) return;
-    setSaving(true);
+const handleSaveLesson = async () => {
+  if (!form.title.trim()) return;
+  setSaving(true);
+
+  try {
+    let lessonData;
 
     if (editingLesson) {
-      await fetch('/api/lessons', {
+      const res = await fetch('/api/lessons', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: editingLesson.id, ...form }),
       });
+      lessonData = await res.json();
     } else {
-      await fetch('/api/lessons', {
+      const res = await fetch('/api/lessons', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
+      lessonData = await res.json();
     }
 
+    // Урок сохранён — закрываем форму
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -96,7 +102,25 @@ export default function TeacherPage() {
     setEditingLesson(null);
     setForm({ title: '', content: '', key_concepts: '', discussion_questions: '', class_id: '', subject: '', grade: '' });
     loadLessons();
-  };
+
+    // Эмбеддинги создаём в фоне если есть контент
+    if (form.content && lessonData.id) {
+      fetch('/api/embeddings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lesson_id: lessonData.id, content: form.content }),
+      }).then(() => {
+        console.log('Эмбеддинги созданы!');
+      }).catch(() => {
+        console.log('Ошибка создания эмбеддингов');
+      });
+    }
+
+  } catch (error) {
+    alert('Ошибка сохранения урока');
+    setSaving(false);
+  }
+};
 
   const handleEditLesson = (lesson) => {
     setEditingLesson(lesson);

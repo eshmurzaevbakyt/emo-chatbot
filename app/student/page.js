@@ -10,7 +10,10 @@ export default function StudentChat() {
   const [lessons, setLessons] = useState([]);
   const [selectedLesson, setSelectedLesson] = useState(null);
   const [user, setUser] = useState(null);
+  const [image, setImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
   const bottomRef = useRef(null);
+  const fileInputRef = useRef(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -34,7 +37,6 @@ export default function StudentChat() {
 
   const selectLesson = async (lesson) => {
     setSelectedLesson(lesson);
-
     const messagesRes = await fetch(`/api/messages?lesson_id=${lesson.id}`);
     if (messagesRes.ok) {
       const data = await messagesRes.json();
@@ -49,24 +51,47 @@ export default function StudentChat() {
     }
   };
 
+  const handleImageSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImage(reader.result);
+      setImagePreview(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
     router.push('/');
   };
 
   const sendMessage = async () => {
-    if (!input.trim() || !selectedLesson) return;
+    if (!input.trim() && !image) return;
+    if (!selectedLesson) return;
 
-    const userMessage = { role: 'user', content: input };
+    const currentImage = image;
+    
+    const userMessage = { 
+  role: 'user', 
+  content: input || 'Помоги с этим заданием', 
+  image: currentImage 
+};
     const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
+    
+    
     setInput('');
+    setImage(null);
+    setImagePreview(null);
     setLoading(true);
 
     await fetch('/api/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role: 'user', content: input, lesson_id: selectedLesson.id }),
+      body: JSON.stringify({ role: 'user', content: userMessage.content, lesson_id: selectedLesson.id }),
     });
 
     try {
@@ -80,6 +105,7 @@ export default function StudentChat() {
             selectedLesson.key_concepts ? `Ключевые понятия: ${selectedLesson.key_concepts}` : '',
             selectedLesson.discussion_questions ? `Вопросы: ${selectedLesson.discussion_questions}` : '',
           ].filter(Boolean).join('\n'),
+          image: currentImage,
         }),
       });
 
@@ -98,7 +124,6 @@ export default function StudentChat() {
     }
   };
 
-  // Группируем уроки по предмету
   const groupedLessons = lessons.reduce((acc, lesson) => {
     const key = lesson.subject || 'Без предмета';
     if (!acc[key]) acc[key] = [];
@@ -119,10 +144,7 @@ export default function StudentChat() {
         </div>
         <div className="flex gap-4 items-center">
           {selectedLesson && (
-            <button
-              onClick={() => { setSelectedLesson(null); setMessages([]); }}
-              className="text-indigo-200 hover:text-white text-sm"
-            >
+            <button onClick={() => { setSelectedLesson(null); setMessages([]); }} className="text-indigo-200 hover:text-white text-sm">
               ← Предметы
             </button>
           )}
@@ -177,15 +199,18 @@ export default function StudentChat() {
         <>
           <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4 max-w-2xl mx-auto w-full">
             {messages.map((msg, i) => (
-              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl text-sm ${
-                  msg.role === 'user'
+                msg.role === 'user'
                     ? 'bg-indigo-600 text-white rounded-br-none'
                     : 'bg-white text-gray-700 shadow rounded-bl-none'
                 }`}>
-                  {msg.content}
+                {msg.image && (
+                    <img src={msg.image} alt="фото" className="rounded-xl mb-2 max-w-full" />
+                )}
+                {msg.content}
                 </div>
-              </div>
+            </div>
             ))}
             {loading && (
               <div className="flex justify-start">
@@ -195,19 +220,51 @@ export default function StudentChat() {
             <div ref={bottomRef} />
           </div>
 
+          {/* Превью изображения */}
+          {imagePreview && (
+            <div className="max-w-2xl mx-auto w-full px-4 pb-2">
+              <div className="relative inline-block">
+                <img src={imagePreview} alt="preview" className="h-20 rounded-xl border border-gray-200" />
+                <button
+                  onClick={() => { setImage(null); setImagePreview(null); }}
+                  className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Поле ввода */}
           <div className="bg-white border-t px-4 py-4">
-            <div className="max-w-2xl mx-auto flex gap-3">
+            <div className="max-w-2xl mx-auto flex gap-3 items-center">
+              {/* Кнопка фото */}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="p-3 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors"
+                title="Загрузить фото задания"
+              >
+                📷
+              </button>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageSelect}
+                ref={fileInputRef}
+                className="hidden"
+              />
+
               <input
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-                placeholder="Задай вопрос по уроку..."
+                placeholder={image ? "Добавь вопрос к фото..." : "Задай вопрос по уроку..."}
                 className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 text-gray-700"
               />
               <button
                 onClick={sendMessage}
-                disabled={loading}
+                disabled={loading || (!input.trim() && !image)}
                 className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50"
               >
                 Отправить
