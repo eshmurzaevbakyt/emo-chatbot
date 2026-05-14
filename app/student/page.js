@@ -43,7 +43,7 @@ export default function StudentChat() {
       } else {
         setMessages([{
           role: 'assistant',
-          content: `Салам! Бүгүн биз "${lesson.title}" темасын окуйбуз. Суроолоруңузду бериңиз! (Привет! Сегодня мы изучаем тему "${lesson.title}". Задавай вопросы!)`,
+          content: `Салам! Бүгүн биз "${lesson.title}" темасын окуйбуз. Суроолоруңузду бериңиз! (Привет! Сегодня изучаем "${lesson.title}". Задавай вопросы!)`,
         }]);
       }
     }
@@ -69,18 +69,20 @@ export default function StudentChat() {
       body: JSON.stringify({ role: 'user', content: input, lesson_id: selectedLesson.id }),
     });
 
-    const lessonContent = [
-      selectedLesson.content,
-      selectedLesson.key_concepts ? `Ключевые понятия: ${selectedLesson.key_concepts}` : '',
-      selectedLesson.discussion_questions ? `Вопросы для обсуждения: ${selectedLesson.discussion_questions}` : '',
-    ].filter(Boolean).join('\n\n');
-
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: updatedMessages, lessonContent }),
+        body: JSON.stringify({
+          messages: updatedMessages,
+          lessonId: selectedLesson.id,
+          lessonContent: [
+            selectedLesson.key_concepts ? `Ключевые понятия: ${selectedLesson.key_concepts}` : '',
+            selectedLesson.discussion_questions ? `Вопросы: ${selectedLesson.discussion_questions}` : '',
+          ].filter(Boolean).join('\n'),
+        }),
       });
+
       const data = await response.json();
       setMessages((prev) => [...prev, { role: 'assistant', content: data.message }]);
 
@@ -95,6 +97,14 @@ export default function StudentChat() {
       setLoading(false);
     }
   };
+
+  // Группируем уроки по предмету
+  const groupedLessons = lessons.reduce((acc, lesson) => {
+    const key = lesson.subject || 'Без предмета';
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(lesson);
+    return acc;
+  }, {});
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -113,7 +123,7 @@ export default function StudentChat() {
               onClick={() => { setSelectedLesson(null); setMessages([]); }}
               className="text-indigo-200 hover:text-white text-sm"
             >
-              ← Уроки
+              ← Предметы
             </button>
           )}
           <button onClick={() => router.push('/profile')} className="text-indigo-200 hover:text-white text-sm">Профиль</button>
@@ -121,30 +131,41 @@ export default function StudentChat() {
         </div>
       </div>
 
-      {/* Выбор урока */}
+      {/* Список предметов */}
       {!selectedLesson && (
         <div className="flex-1 max-w-2xl mx-auto w-full px-4 py-8">
-          <h2 className="text-xl font-bold text-gray-800 mb-6">Выбери урок</h2>
-          {lessons.length === 0 ? (
+          <h2 className="text-xl font-bold text-gray-800 mb-6">Мои предметы</h2>
+          {Object.keys(groupedLessons).length === 0 ? (
             <div className="bg-white rounded-2xl shadow p-8 text-center text-gray-400">
               Учитель ещё не добавил уроки
             </div>
           ) : (
-            <div className="space-y-3">
-              {lessons.map((lesson) => (
-                <button
-                  key={lesson.id}
-                  onClick={() => selectLesson(lesson)}
-                  className="w-full bg-white rounded-2xl shadow p-5 text-left hover:shadow-md transition-shadow"
-                >
-                  <h3 className="font-semibold text-gray-800">{lesson.title}</h3>
-                  {lesson.key_concepts && (
-                    <p className="text-sm text-indigo-500 mt-1">🔑 {lesson.key_concepts}</p>
-                  )}
-                  {lesson.discussion_questions && (
-                    <p className="text-sm text-gray-400 mt-1">💬 {lesson.discussion_questions.slice(0, 60)}...</p>
-                  )}
-                </button>
+            <div className="space-y-4">
+              {Object.entries(groupedLessons).map(([subject, subjectLessons]) => (
+                <div key={subject} className="bg-white rounded-2xl shadow overflow-hidden">
+                  <div className="px-5 py-3 bg-indigo-50 border-b">
+                    <h3 className="font-semibold text-indigo-700">{subject}</h3>
+                  </div>
+                  {subjectLessons.map((lesson) => (
+                    <button
+                      key={lesson.id}
+                      onClick={() => selectLesson(lesson)}
+                      className="w-full text-left px-5 py-4 border-b last:border-0 hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-gray-800">{lesson.title}</p>
+                          {lesson.key_concepts && (
+                            <p className="text-xs text-indigo-500 mt-1">🔑 {lesson.key_concepts}</p>
+                          )}
+                        </div>
+                        {lesson.grade && (
+                          <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded-full">{lesson.grade}</span>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
               ))}
             </div>
           )}
@@ -195,7 +216,6 @@ export default function StudentChat() {
           </div>
         </>
       )}
-
     </div>
   );
 }
