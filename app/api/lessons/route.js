@@ -7,12 +7,24 @@ const supabase = createClient(
 );
 
 export async function GET(request) {
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get('id');
+
+  if (id) {
+    const { data } = await supabase
+      .from('lessons')
+      .select('*')
+      .eq('id', id)
+      .single();
+    return Response.json(data || {});
+  }
+
   const { data } = await supabase
     .from('lessons')
-    .select('content')
-    .limit(1)
-    .single();
-  return Response.json(data || { content: '' });
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  return Response.json(data || []);
 }
 
 export async function POST(request) {
@@ -20,19 +32,54 @@ export async function POST(request) {
   if (!token) return Response.json({ error: 'Не авторизован' }, { status: 401 });
 
   const user = jwt.verify(token, process.env.JWT_SECRET);
-  const { content } = await request.json();
+  const { title, content, key_concepts, discussion_questions } = await request.json();
 
-  const { data: existing } = await supabase
+  if (!title) return Response.json({ error: 'Укажите название урока' }, { status: 400 });
+
+  const { data, error } = await supabase
     .from('lessons')
-    .select('id')
-    .eq('teacher_id', user.id)
+    .insert({ teacher_id: user.id, title, content, key_concepts, discussion_questions })
+    .select()
     .single();
 
-  if (existing) {
-    await supabase.from('lessons').update({ content }).eq('teacher_id', user.id);
-  } else {
-    await supabase.from('lessons').insert({ teacher_id: user.id, content });
-  }
+  if (error) return Response.json({ error: 'Ошибка создания урока' }, { status: 500 });
+
+  return Response.json(data);
+}
+
+export async function PUT(request) {
+  const token = request.cookies.get('auth-token')?.value;
+  if (!token) return Response.json({ error: 'Не авторизован' }, { status: 401 });
+
+  const user = jwt.verify(token, process.env.JWT_SECRET);
+  const { id, title, content, key_concepts, discussion_questions } = await request.json();
+
+  const { data, error } = await supabase
+    .from('lessons')
+    .update({ title, content, key_concepts, discussion_questions, updated_at: new Date() })
+    .eq('id', id)
+    .eq('teacher_id', user.id)
+    .select()
+    .single();
+
+  if (error) return Response.json({ error: 'Ошибка обновления урока' }, { status: 500 });
+
+  return Response.json(data);
+}
+
+export async function DELETE(request) {
+  const token = request.cookies.get('auth-token')?.value;
+  if (!token) return Response.json({ error: 'Не авторизован' }, { status: 401 });
+
+  const user = jwt.verify(token, process.env.JWT_SECRET);
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get('id');
+
+  await supabase
+    .from('lessons')
+    .delete()
+    .eq('id', id)
+    .eq('teacher_id', user.id);
 
   return Response.json({ success: true });
 }
