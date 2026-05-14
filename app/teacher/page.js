@@ -6,15 +6,24 @@ import { useRouter } from 'next/navigation';
 export default function TeacherPage() {
   const [tab, setTab] = useState('lessons');
   const [lessons, setLessons] = useState([]);
+  const [classes, setClasses] = useState([]);
   const [students, setStudents] = useState([]);
   const [user, setUser] = useState(null);
-  const [showForm, setShowForm] = useState(false);
+  const [showLessonForm, setShowLessonForm] = useState(false);
+  const [showClassForm, setShowClassForm] = useState(false);
   const [editingLesson, setEditingLesson] = useState(null);
+  const [selectedClass, setSelectedClass] = useState(null);
+  const [newClassName, setNewClassName] = useState('');
+  const [addStudentUsername, setAddStudentUsername] = useState('');
+  const [addStudentError, setAddStudentError] = useState('');
   const [form, setForm] = useState({
     title: '',
     content: '',
     key_concepts: '',
     discussion_questions: '',
+    class_id: '',
+    subject: '',
+    grade: '',
   });
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -27,6 +36,7 @@ export default function TeacherPage() {
       if (!response.ok) { router.push('/'); return; }
       setUser(await response.json());
       loadLessons();
+      loadClasses();
       loadStudents();
     };
     init();
@@ -35,6 +45,11 @@ export default function TeacherPage() {
   const loadLessons = async () => {
     const res = await fetch('/api/lessons');
     if (res.ok) setLessons(await res.json());
+  };
+
+  const loadClasses = async () => {
+    const res = await fetch('/api/classes');
+    if (res.ok) setClasses(await res.json());
   };
 
   const loadStudents = async () => {
@@ -46,15 +61,9 @@ export default function TeacherPage() {
     const file = e.target.files[0];
     if (!file) return;
     setUploading(true);
-
     const formData = new FormData();
     formData.append('file', file);
-
-    const res = await fetch('/api/lessons/parse', {
-      method: 'POST',
-      body: formData,
-    });
-
+    const res = await fetch('/api/lessons/parse', { method: 'POST', body: formData });
     if (res.ok) {
       const data = await res.json();
       setForm((prev) => ({ ...prev, content: data.text }));
@@ -62,7 +71,7 @@ export default function TeacherPage() {
     setUploading(false);
   };
 
-  const handleSave = async () => {
+  const handleSaveLesson = async () => {
     if (!form.title.trim()) return;
     setSaving(true);
 
@@ -83,27 +92,74 @@ export default function TeacherPage() {
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
-    setShowForm(false);
+    setShowLessonForm(false);
     setEditingLesson(null);
-    setForm({ title: '', content: '', key_concepts: '', discussion_questions: '' });
+    setForm({ title: '', content: '', key_concepts: '', discussion_questions: '', class_id: '', subject: '', grade: '' });
     loadLessons();
   };
 
-  const handleEdit = (lesson) => {
+  const handleEditLesson = (lesson) => {
     setEditingLesson(lesson);
     setForm({
       title: lesson.title,
       content: lesson.content || '',
       key_concepts: lesson.key_concepts || '',
       discussion_questions: lesson.discussion_questions || '',
+      class_id: lesson.class_id || '',
+      subject: lesson.subject || '',
+      grade: lesson.grade || '',
     });
-    setShowForm(true);
+    setShowLessonForm(true);
   };
 
-  const handleDelete = async (id) => {
+  const handleDeleteLesson = async (id) => {
     if (!confirm('Удалить урок?')) return;
     await fetch(`/api/lessons?id=${id}`, { method: 'DELETE' });
     loadLessons();
+  };
+
+  const handleCreateClass = async () => {
+    if (!newClassName.trim()) return;
+    await fetch('/api/classes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newClassName }),
+    });
+    setNewClassName('');
+    setShowClassForm(false);
+    loadClasses();
+  };
+
+  const handleDeleteClass = async (id) => {
+    if (!confirm('Удалить класс?')) return;
+    await fetch(`/api/classes?id=${id}`, { method: 'DELETE' });
+    loadClasses();
+  };
+
+  const handleAddStudent = async (classId) => {
+    if (!addStudentUsername.trim()) return;
+    setAddStudentError('');
+    const res = await fetch('/api/classes/students', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ class_id: classId, username: addStudentUsername }),
+    });
+    if (res.ok) {
+      setAddStudentUsername('');
+      loadClasses();
+    } else {
+      const data = await res.json();
+      setAddStudentError(data.error);
+    }
+  };
+
+  const handleRemoveStudent = async (classId, studentId) => {
+    await fetch('/api/classes/students', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ class_id: classId, student_id: studentId }),
+    });
+    loadClasses();
   };
 
   const handleLogout = async () => {
@@ -128,46 +184,75 @@ export default function TeacherPage() {
 
       {/* Вкладки */}
       <div className="bg-white border-b px-6">
-        <div className="max-w-3xl mx-auto flex gap-6">
-          <button
-            onClick={() => setTab('lessons')}
-            className={`py-4 text-sm font-medium border-b-2 transition-colors ${
-              tab === 'lessons' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500'
-            }`}
-          >
-            Уроки ({lessons.length})
-          </button>
-          <button
-            onClick={() => setTab('students')}
-            className={`py-4 text-sm font-medium border-b-2 transition-colors ${
-              tab === 'students' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500'
-            }`}
-          >
-            Ученики ({students.length})
-          </button>
+        <div className="max-w-4xl mx-auto flex gap-6">
+          {['lessons', 'classes', 'students'].map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`py-4 text-sm font-medium border-b-2 transition-colors ${
+                tab === t ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500'
+              }`}
+            >
+              {t === 'lessons' ? `Уроки (${lessons.length})` : t === 'classes' ? `Классы (${classes.length})` : `Ученики (${students.length})`}
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="flex-1 max-w-3xl mx-auto w-full px-4 py-8">
+      <div className="flex-1 max-w-4xl mx-auto w-full px-4 py-8">
 
         {/* Уроки */}
         {tab === 'lessons' && (
           <div className="space-y-4">
-            {!showForm && (
+            {!showLessonForm && (
               <button
-                onClick={() => { setShowForm(true); setEditingLesson(null); setForm({ title: '', content: '', key_concepts: '', discussion_questions: '' }); }}
-                className="w-full py-3 border-2 border-dashed border-indigo-300 text-indigo-600 rounded-2xl font-medium hover:bg-indigo-50 transition-colors"
+                onClick={() => { setShowLessonForm(true); setEditingLesson(null); setForm({ title: '', content: '', key_concepts: '', discussion_questions: '', class_id: '', subject: '', grade: '' }); }}
+                className="w-full py-3 border-2 border-dashed border-indigo-300 text-indigo-600 rounded-2xl font-medium hover:bg-indigo-50"
               >
                 + Новый урок
               </button>
             )}
 
-            {/* Форма создания/редактирования */}
-            {showForm && (
+            {showLessonForm && (
               <div className="bg-white rounded-2xl shadow p-6 space-y-4">
-                <h2 className="text-xl font-bold text-gray-800">
-                  {editingLesson ? 'Редактировать урок' : 'Новый урок'}
-                </h2>
+                <h2 className="text-xl font-bold text-gray-800">{editingLesson ? 'Редактировать' : 'Новый урок'}</h2>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-1 block">Предмет</label>
+                    <input
+                      type="text"
+                      placeholder="Математика"
+                      value={form.subject}
+                      onChange={(e) => setForm({ ...form, subject: e.target.value })}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 text-gray-700"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-1 block">Класс</label>
+                    <input
+                      type="text"
+                      placeholder="2 класс"
+                      value={form.grade}
+                      onChange={(e) => setForm({ ...form, grade: e.target.value })}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 text-gray-700"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1 block">Класс (группа учеников)</label>
+                  <select
+                    value={form.class_id}
+                    onChange={(e) => setForm({ ...form, class_id: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 text-gray-700"
+                  >
+                    <option value="">Все ученики</option>
+                    {classes.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
 
                 <input
                   type="text"
@@ -177,19 +262,13 @@ export default function TeacherPage() {
                   className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 text-gray-700"
                 />
 
-                {/* Загрузка файла */}
                 <div className="border-2 border-dashed border-gray-200 rounded-xl p-4 text-center">
                   <p className="text-gray-500 text-sm mb-2">Загрузите PDF или DOCX файл</p>
                   <label className="cursor-pointer">
                     <span className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-lg text-sm font-medium hover:bg-indigo-100">
                       {uploading ? 'Загружаю...' : '📎 Выбрать файл'}
                     </span>
-                    <input
-                      type="file"
-                      accept=".pdf,.docx"
-                      onChange={handleFileUpload}
-                      className="hidden"
-                    />
+                    <input type="file" accept=".pdf,.docx" onChange={handleFileUpload} className="hidden" />
                   </label>
                   {form.content && (
                     <p className="text-green-600 text-xs mt-2">✓ Текст извлечён ({form.content.length} символов)</p>
@@ -211,7 +290,7 @@ export default function TeacherPage() {
                   <label className="text-sm font-medium text-gray-700 mb-1 block">Ключевые понятия</label>
                   <input
                     type="text"
-                    placeholder="хлорофилл, фотосинтез, глюкоза..."
+                    placeholder="хлорофилл, фотосинтез..."
                     value={form.key_concepts}
                     onChange={(e) => setForm({ ...form, key_concepts: e.target.value })}
                     className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 text-gray-700"
@@ -221,7 +300,7 @@ export default function TeacherPage() {
                 <div>
                   <label className="text-sm font-medium text-gray-700 mb-1 block">Вопросы для обсуждения</label>
                   <textarea
-                    placeholder="Почему листья зелёные? Что нужно растению для роста?..."
+                    placeholder="Почему листья зелёные?..."
                     value={form.discussion_questions}
                     onChange={(e) => setForm({ ...form, discussion_questions: e.target.value })}
                     rows={3}
@@ -231,15 +310,15 @@ export default function TeacherPage() {
 
                 <div className="flex gap-3">
                   <button
-                    onClick={handleSave}
+                    onClick={handleSaveLesson}
                     disabled={saving}
-                    className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                    className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 disabled:opacity-50"
                   >
                     {saved ? '✓ Сохранено!' : saving ? 'Сохраняю...' : 'Сохранить'}
                   </button>
                   <button
-                    onClick={() => { setShowForm(false); setEditingLesson(null); }}
-                    className="px-6 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-50"
+                    onClick={() => { setShowLessonForm(false); setEditingLesson(null); }}
+                    className="px-6 py-3 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50"
                   >
                     Отмена
                   </button>
@@ -247,37 +326,128 @@ export default function TeacherPage() {
               </div>
             )}
 
-            {/* Список уроков */}
-            {lessons.length === 0 && !showForm ? (
-              <div className="bg-white rounded-2xl shadow p-8 text-center text-gray-400">
-                Уроков пока нет — создайте первый!
+            {/* Список уроков сгруппированных по предмету */}
+            {Object.entries(
+              lessons.reduce((acc, lesson) => {
+                const key = lesson.subject || 'Без предмета';
+                if (!acc[key]) acc[key] = [];
+                acc[key].push(lesson);
+                return acc;
+              }, {})
+            ).map(([subject, subjectLessons]) => (
+              <div key={subject} className="bg-white rounded-2xl shadow overflow-hidden">
+                <div className="px-5 py-3 bg-indigo-50 border-b">
+                  <h3 className="font-semibold text-indigo-700">{subject}</h3>
+                </div>
+                {subjectLessons.map((lesson) => (
+                  <div key={lesson.id} className="flex items-center justify-between p-5 border-b last:border-0 hover:bg-gray-50">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-medium text-gray-800">{lesson.title}</h4>
+                        {lesson.grade && <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{lesson.grade}</span>}
+                      </div>
+                      {lesson.key_concepts && <p className="text-xs text-indigo-500 mt-1">🔑 {lesson.key_concepts}</p>}
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => handleEditLesson(lesson)} className="px-3 py-2 text-sm text-indigo-600 hover:bg-indigo-50 rounded-lg">Изменить</button>
+                      <button onClick={() => handleDeleteLesson(lesson.id)} className="px-3 py-2 text-sm text-red-500 hover:bg-red-50 rounded-lg">Удалить</button>
+                    </div>
+                  </div>
+                ))}
               </div>
+            ))}
+
+            {lessons.length === 0 && !showLessonForm && (
+              <div className="bg-white rounded-2xl shadow p-8 text-center text-gray-400">Уроков пока нет — создайте первый!</div>
+            )}
+          </div>
+        )}
+
+        {/* Классы */}
+        {tab === 'classes' && (
+          <div className="space-y-4">
+            {!showClassForm && (
+              <button
+                onClick={() => setShowClassForm(true)}
+                className="w-full py-3 border-2 border-dashed border-indigo-300 text-indigo-600 rounded-2xl font-medium hover:bg-indigo-50"
+              >
+                + Новый класс
+              </button>
+            )}
+
+            {showClassForm && (
+              <div className="bg-white rounded-2xl shadow p-6 space-y-4">
+                <h2 className="text-xl font-bold text-gray-800">Новый класс</h2>
+                <input
+                  type="text"
+                  placeholder="Название класса (например: 2А)"
+                  value={newClassName}
+                  onChange={(e) => setNewClassName(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 text-gray-700"
+                />
+                <div className="flex gap-3">
+                  <button onClick={handleCreateClass} className="flex-1 py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700">Создать</button>
+                  <button onClick={() => setShowClassForm(false)} className="px-6 py-3 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50">Отмена</button>
+                </div>
+              </div>
+            )}
+
+            {classes.length === 0 && !showClassForm ? (
+              <div className="bg-white rounded-2xl shadow p-8 text-center text-gray-400">Классов пока нет — создайте первый!</div>
             ) : (
-              lessons.map((lesson) => (
-                <div key={lesson.id} className="bg-white rounded-2xl shadow p-5 flex items-center justify-between">
-                  <div>
-                    <h3 className="font-semibold text-gray-800">{lesson.title}</h3>
-                    <p className="text-sm text-gray-400 mt-1">
-                      {lesson.content ? `${lesson.content.slice(0, 60)}...` : 'Нет материала'}
-                    </p>
-                    {lesson.key_concepts && (
-                      <p className="text-xs text-indigo-500 mt-1">🔑 {lesson.key_concepts}</p>
+              classes.map((cls) => (
+                <div key={cls.id} className="bg-white rounded-2xl shadow overflow-hidden">
+                  <div className="px-5 py-4 bg-indigo-50 border-b flex items-center justify-between">
+                    <h3 className="font-semibold text-indigo-700">{cls.name}</h3>
+                    <button onClick={() => handleDeleteClass(cls.id)} className="text-red-400 hover:text-red-600 text-sm">Удалить класс</button>
+                  </div>
+
+                  {/* Добавить ученика */}
+                  <div className="p-4 border-b">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Логин ученика (@username)"
+                        value={selectedClass === cls.id ? addStudentUsername : ''}
+                        onChange={(e) => { setSelectedClass(cls.id); setAddStudentUsername(e.target.value); setAddStudentError(''); }}
+                        className="flex-1 px-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 text-gray-700 text-sm"
+                      />
+                      <button
+                        onClick={() => handleAddStudent(cls.id)}
+                        className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm hover:bg-indigo-700"
+                      >
+                        Добавить
+                      </button>
+                    </div>
+                    {addStudentError && selectedClass === cls.id && (
+                      <p className="text-red-500 text-xs mt-1">{addStudentError}</p>
                     )}
                   </div>
-                  <div className="flex gap-2 ml-4">
-                    <button
-                      onClick={() => handleEdit(lesson)}
-                      className="px-3 py-2 text-sm text-indigo-600 hover:bg-indigo-50 rounded-lg"
-                    >
-                      Изменить
-                    </button>
-                    <button
-                      onClick={() => handleDelete(lesson.id)}
-                      className="px-3 py-2 text-sm text-red-500 hover:bg-red-50 rounded-lg"
-                    >
-                      Удалить
-                    </button>
-                  </div>
+
+                  {/* Список учеников */}
+                  {cls.class_students?.length === 0 ? (
+                    <p className="text-gray-400 text-sm p-4">Учеников пока нет</p>
+                  ) : (
+                    cls.class_students?.map((cs) => (
+                      <div key={cs.student_id} className="flex items-center justify-between px-5 py-3 border-b last:border-0">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-sm font-medium">
+                            {cs.users?.first_name?.[0]}{cs.users?.last_name?.[0]}
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-800">{cs.users?.first_name} {cs.users?.last_name}</p>
+                            <p className="text-xs text-gray-400">@{cs.users?.username}</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleRemoveStudent(cls.id, cs.student_id)}
+                          className="text-red-400 hover:text-red-600 text-xs"
+                        >
+                          Удалить
+                        </button>
+                      </div>
+                    ))
+                  )}
                 </div>
               ))
             )}
@@ -287,7 +457,7 @@ export default function TeacherPage() {
         {/* Ученики */}
         {tab === 'students' && (
           <div className="bg-white rounded-2xl shadow p-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-6">Ученики ({students.length})</h2>
+            <h2 className="text-xl font-bold text-gray-800 mb-6">Все ученики ({students.length})</h2>
             {students.length === 0 ? (
               <p className="text-gray-400 text-center py-8">Пока нет зарегистрированных учеников</p>
             ) : (
