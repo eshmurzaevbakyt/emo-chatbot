@@ -12,6 +12,7 @@ export async function POST(request) {
   const { messages, lessonContent, lessonId, image } = await request.json();
 
   let context = lessonContent || '';
+  let usedWebSearch = false;
 
   // RAG поиск если есть lessonId
   if (lessonId && messages.length > 0) {
@@ -31,7 +32,37 @@ export async function POST(request) {
       });
 
       if (chunks && chunks.length > 0) {
-        context = chunks.map(c => c.content).join('\n\n');
+        const relevantChunks = chunks.filter(c => c.similarity > 0.5);
+        if (relevantChunks.length > 0) {
+          context = relevantChunks.map(c => c.content).join('\n\n');
+        }
+      }
+    }
+  }
+
+  // Если контекста мало — ищем в интернете через GPT с web_search
+  if (!context || context.length < 100) {
+    usedWebSearch = true;
+    const lastUserMessage = messages.filter(m => m.role === 'user').pop();
+    
+    if (lastUserMessage) {
+      try {
+        const searchResponse = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: [
+            {
+              role: 'system',
+              content: 'Найди краткую информацию по теме для ученика начальной школы. Отвечай только фактами, без лишних слов. Максимум 200 слов.'
+            },
+            { role: 'user', content: lastUserMessage.content }
+          ],
+          max_tokens: 300,
+        });
+
+        const webInfo = searchResponse.choices[0].message.content;
+        context = `Дополнительная информация из интернета:\n${webInfo}`;
+      } catch (e) {
+        console.log('Web search failed:', e);
       }
     }
   }
@@ -45,21 +76,18 @@ export async function POST(request) {
 - Отвечай просто и понятно для детей начальной школы
 - Если ученик правильно рассуждает — хвали его
 - Если ученик загрузил картинку — анализируй её и давай подсказки
+${usedWebSearch ? '- Используй дополнительную информацию из интернета для помощи ученику' : ''}
 
-${context ? `Материал урока:\n${context}` : ''}`;
+${context ? `Материал урока:\n${context}` : 'Материал урока пока не загружен.'}`;
 
   // Формируем сообщения с поддержкой изображений
   const formattedMessages = messages.map((msg, index) => {
-    // Последнее сообщение пользователя может содержать картинку
     if (index === messages.length - 1 && msg.role === 'user' && image) {
       return {
         role: 'user',
         content: [
           { type: 'text', text: msg.content || 'Помоги с этим заданием' },
-          {
-            type: 'image_url',
-            image_url: { url: image },
-          },
+          { type: 'image_url', image_url: { url: image } },
         ],
       };
     }
@@ -77,5 +105,6 @@ ${context ? `Материал урока:\n${context}` : ''}`;
 
   return Response.json({
     message: response.choices[0].message.content,
+    usedWebSearch,
   });
 }

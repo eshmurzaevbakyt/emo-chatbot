@@ -145,7 +145,11 @@ export default function StudentChat() {
       });
 
       const data = await response.json();
-      setMessages((prev) => [...prev, { role: 'assistant', content: data.message }]);
+      setMessages((prev) => [...prev, { 
+        role: 'assistant', 
+        content: data.message,
+        usedWebSearch: data.usedWebSearch 
+      }]);
 
       await fetch('/api/messages', {
         method: 'POST',
@@ -340,6 +344,13 @@ export default function StudentChat() {
             👎
           </button>
         </div>
+      )}
+
+      {/* Индикатор веб-поиска — вставь сюда */}
+      {msg.role === 'assistant' && msg.usedWebSearch && (
+        <p className="text-xs text-gray-400 px-1 flex items-center gap-1">
+          🌐 Ответ дополнен из интернета
+        </p>
       )}
     </div>
   </div>
