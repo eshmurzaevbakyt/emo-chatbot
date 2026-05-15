@@ -16,6 +16,7 @@ export default function TeacherPage() {
   const [newClassName, setNewClassName] = useState('');
   const [addStudentUsername, setAddStudentUsername] = useState('');
   const [addStudentError, setAddStudentError] = useState('');
+  const [feedbackStats, setFeedbackStats] = useState([]);
   const [form, setForm] = useState({
     title: '',
     content: '',
@@ -38,7 +39,9 @@ export default function TeacherPage() {
       loadLessons();
       loadClasses();
       loadStudents();
+      loadFeedback();
     };
+
     init();
   }, []);
 
@@ -55,6 +58,11 @@ export default function TeacherPage() {
   const loadStudents = async () => {
     const res = await fetch('/api/users');
     if (res.ok) setStudents(await res.json());
+  };
+
+  const loadFeedback = async () => {
+  const res = await fetch('/api/feedback/stats');
+  if (res.ok) setFeedbackStats(await res.json());
   };
 
   const handleFileUpload = async (e) => {
@@ -227,7 +235,7 @@ const handleSaveLesson = async () => {
       {/* Вкладки */}
       <div className="bg-white border-b px-6">
         <div className="max-w-4xl mx-auto flex gap-6">
-          {['lessons', 'classes', 'students'].map((t) => (
+          {['lessons', 'classes', 'students', 'feedback'].map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -235,7 +243,10 @@ const handleSaveLesson = async () => {
                 tab === t ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500'
               }`}
             >
-              {t === 'lessons' ? `Уроки (${lessons.length})` : t === 'classes' ? `Классы (${classes.length})` : `Ученики (${students.length})`}
+              {t === 'lessons' ? `Уроки (${lessons.length})` : 
+              t === 'classes' ? `Классы (${classes.length})` : 
+              t === 'students' ? `Ученики (${students.length})` :
+              'Отзывы'}
             </button>
           ))}
         </div>
@@ -522,6 +533,82 @@ const handleSaveLesson = async () => {
             )}
           </div>
         )}
+
+        {/* Отзывы */}
+{tab === 'feedback' && (
+  <div className="space-y-4">
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+      <h2 className="text-xl font-bold text-gray-800 mb-2">Отзывы учеников</h2>
+      <p className="text-gray-400 text-sm mb-6">Оценки ответов чатбота от учеников</p>
+
+      {/* Статистика */}
+      <div className="grid grid-cols-2 gap-4 mb-8">
+        <div className="bg-green-50 rounded-xl p-4 text-center">
+          <p className="text-3xl font-bold text-green-600">
+            {feedbackStats.filter(f => f.rating === 'up').length}
+          </p>
+          <p className="text-sm text-green-500 mt-1">👍 Полезных ответов</p>
+        </div>
+        <div className="bg-red-50 rounded-xl p-4 text-center">
+          <p className="text-3xl font-bold text-red-500">
+            {feedbackStats.filter(f => f.rating === 'down').length}
+          </p>
+          <p className="text-sm text-red-400 mt-1">👎 Непонятных ответов</p>
+        </div>
+      </div>
+
+      {/* Непонятные ответы */}
+      {feedbackStats.filter(f => f.rating === 'down').length > 0 && (
+        <div className="mb-6">
+          <h3 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+            👎 Ответы которые ученики не поняли
+          </h3>
+          <div className="space-y-3">
+            {feedbackStats.filter(f => f.rating === 'down').map((f, i) => (
+              <div key={i} className="border border-red-100 rounded-xl p-4 bg-red-50">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs font-medium text-red-500 bg-red-100 px-2 py-0.5 rounded-full">
+                    {f.lessons?.subject || 'Без предмета'}
+                  </span>
+                  <span className="text-xs text-gray-400">→</span>
+                  <span className="text-xs text-gray-500">{f.lessons?.title}</span>
+                </div>
+                <p className="text-sm text-gray-700 leading-relaxed">{f.message_content}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Полезные ответы */}
+      {feedbackStats.filter(f => f.rating === 'up').length > 0 && (
+        <div>
+          <h3 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+            👍 Ответы которые понравились ученикам
+          </h3>
+          <div className="space-y-3">
+            {feedbackStats.filter(f => f.rating === 'up').map((f, i) => (
+              <div key={i} className="border border-green-100 rounded-xl p-4 bg-green-50">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs font-medium text-green-600 bg-green-100 px-2 py-0.5 rounded-full">
+                    {f.lessons?.subject || 'Без предмета'}
+                  </span>
+                  <span className="text-xs text-gray-400">→</span>
+                  <span className="text-xs text-gray-500">{f.lessons?.title}</span>
+                </div>
+                <p className="text-sm text-gray-700 leading-relaxed">{f.message_content}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {feedbackStats.length === 0 && (
+        <p className="text-gray-400 text-center py-8">Пока нет отзывов от учеников</p>
+      )}
+    </div>
+  </div>
+)}
 
       </div>
     </div>

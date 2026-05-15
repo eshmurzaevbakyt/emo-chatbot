@@ -168,6 +168,29 @@ export default function StudentChat() {
 
   const initials = user ? `${user.firstName?.[0]}${user.lastName?.[0]}` : '?';
 
+  const handleFeedback = async (messageContent, rating, currentFeedback) => {
+  if (!selectedLesson) return;
+
+  // Обновляем UI сразу
+  setMessages((prev) =>
+    prev.map((msg) =>
+      msg.content === messageContent
+        ? { ...msg, feedback: msg.feedback === rating ? null : rating }
+        : msg
+    )
+  );
+
+  await fetch('/api/feedback', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      lesson_id: selectedLesson.id,
+      rating: currentFeedback === rating ? null : rating,
+      message_content: messageContent,
+    }),
+  });
+};
+
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'linear-gradient(135deg, #f0f4ff 0%, #faf5ff 100%)' }}>
 
@@ -266,35 +289,61 @@ export default function StudentChat() {
           <div className="flex-1 overflow-y-auto px-4 py-6 max-w-2xl mx-auto w-full">
             <div className="space-y-2">
               {messages.map((msg, i) => (
-                <div key={i} className={`flex items-end gap-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'} mb-4`}>
+  <div key={i} className={`flex items-end gap-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'} mb-4`}>
 
-                  {/* Аватарка */}
-                  {msg.role === 'assistant' && (
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold shadow-md flex-shrink-0">
-                      AI
-                    </div>
-                  )}
-                  {msg.role === 'user' && (
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-rose-500 flex items-center justify-center text-white text-xs font-bold shadow-md flex-shrink-0">
-                      {initials}
-                    </div>
-                  )}
+    {/* Аватарка */}
+    {msg.role === 'assistant' && (
+      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center text-white text-xs font-bold shadow-md flex-shrink-0">
+        AI
+      </div>
+    )}
+    {msg.role === 'user' && (
+      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-rose-500 flex items-center justify-center text-white text-xs font-bold shadow-md flex-shrink-0">
+        {initials}
+      </div>
+    )}
 
-                  {/* Сообщение */}
-                  <div className={`max-w-xs lg:max-w-md ${msg.role === 'user' ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
-                    {msg.image && (
-                      <img src={msg.image} alt="фото" className="rounded-2xl max-w-full shadow-sm border border-gray-100" />
-                    )}
-                    <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${
-                      msg.role === 'user'
-                        ? 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white rounded-br-none shadow-md'
-                        : 'bg-white text-gray-700 rounded-bl-none shadow-sm border border-gray-100'
-                    }`}>
-                      {msg.content}
-                    </div>
-                  </div>
-                </div>
-              ))}
+    {/* Сообщение */}
+    <div className={`max-w-xs lg:max-w-md ${msg.role === 'user' ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
+      {msg.image && (
+        <img src={msg.image} alt="фото" className="rounded-2xl max-w-full shadow-sm border border-gray-100" />
+      )}
+      <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed ${
+        msg.role === 'user'
+          ? 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white rounded-br-none shadow-md'
+          : 'bg-white text-gray-700 rounded-bl-none shadow-sm border border-gray-100'
+      }`}>
+        {msg.content}
+      </div>
+
+      {/* Кнопки оценки — только для ответов бота */}
+      {msg.role === 'assistant' && i > 0 && (
+        <div className="flex gap-1 px-1">
+          <button
+            onClick={() => handleFeedback(msg.content, 'up', msg.feedback)}
+            className={`text-sm px-2 py-0.5 rounded-lg transition-colors ${
+              msg.feedback === 'up'
+                ? 'bg-green-100 text-green-600'
+                : 'text-gray-300 hover:text-green-500 hover:bg-green-50'
+            }`}
+          >
+            👍
+          </button>
+          <button
+            onClick={() => handleFeedback(msg.content, 'down', msg.feedback)}
+            className={`text-sm px-2 py-0.5 rounded-lg transition-colors ${
+              msg.feedback === 'down'
+                ? 'bg-red-100 text-red-500'
+                : 'text-gray-300 hover:text-red-400 hover:bg-red-50'
+            }`}
+          >
+            👎
+          </button>
+        </div>
+      )}
+    </div>
+  </div>
+))}
 
               {loading && <TypingIndicator />}
               <div ref={bottomRef} />
